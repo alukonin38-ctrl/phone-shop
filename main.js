@@ -1,12 +1,12 @@
-import { hashPassword, verifyPassword, saveUser, findUser, isCryptoSupported } from './auth.js';
 import { formatPrice } from './utils.js';
 
-// ----- Проверка поддержки криптографии -----
-if (!isCryptoSupported()) {
-    alert('⚠️ Ваш браузер не поддерживает криптографические операции, либо сайт открыт не по HTTPS. Для работы используйте HTTPS или localhost.');
-}
+// ====== АДРЕС СЕРВЕРА ======
+// Локально:
+const API_BASE = 'http://localhost:5000/api';
+// Когда выложите сервер на Render — замените на:
+// const API_BASE = 'https://ваш-сервер.onrender.com/api';
 
-// ----- Список телефонов (данные) -----
+// ----- Список телефонов -----
 const phones = [
     { name: 'iPhone 14', price: 79990, img: 'https://fdn2.gsmarena.com/vv/pics/apple/apple-iphone-14-2.jpg' },
     { name: 'iPhone 15', price: 89990, img: 'https://fdn2.gsmarena.com/vv/pics/apple/apple-iphone-15-1.jpg' },
@@ -87,61 +87,39 @@ function renderCatalog() {
     });
 }
 
-// ----- Функция входа (с обработкой ошибок) -----
-async function loginUser(login, password) {
-    try {
-        const user = findUser(login);
-        if (!user) {
-            loginMessage.textContent = '❌ Пользователь не найден';
-            loginMessage.className = 'message error';
-            return false;
-        }
-        const isValid = await verifyPassword(password, user.hash, user.salt);
-        if (isValid) {
-            loginMessage.textContent = '';
-            loginMessage.className = 'message';
-            sessionStorage.setItem('currentUser', login);
-            showCatalog(login);
-            return true;
-        } else {
-            loginMessage.textContent = '❌ Неверный пароль';
-            loginMessage.className = 'message error';
-            return false;
-        }
-    } catch (error) {
-        console.error('Ошибка входа:', error);
-        loginMessage.textContent = '⚠️ Ошибка при проверке пароля. Убедитесь, что сайт открыт через HTTPS или localhost.';
-        loginMessage.className = 'message error';
+// ----- Регистрация (через сервер) -----
+async function registerUser(login, password, confirm) {
+    if (password !== confirm) {
+        registerMessage.textContent = '❌ Пароли не совпадают';
+        registerMessage.className = 'message error';
         return false;
     }
-}
+    if (password.length < 8) {
+        registerMessage.textContent = '❌ Пароль должен содержать не менее 8 символов';
+        registerMessage.className = 'message error';
+        return false;
+    }
 
-// ----- Функция регистрации (с обработкой ошибок) -----
-async function registerUser(login, password, confirm) {
     try {
-        if (password !== confirm) {
-            registerMessage.textContent = '❌ Пароли не совпадают';
+        const response = await fetch(`${API_BASE}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login, password, confirm })
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            registerMessage.textContent = '❌ ' + (data.error || 'Ошибка');
             registerMessage.className = 'message error';
             return false;
         }
-        if (password.length < 6) {
-            registerMessage.textContent = '❌ Пароль должен содержать не менее 6 символов';
-            registerMessage.className = 'message error';
-            return false;
-        }
-        if (findUser(login)) {
-            registerMessage.textContent = '❌ Пользователь с таким логином уже существует';
-            registerMessage.className = 'message error';
-            return false;
-        }
-        const { hash, salt } = await hashPassword(password);
-        const user = { login, hash, salt };
-        saveUser(user);
-        registerMessage.textContent = '✅ Регистрация успешна! Теперь войдите.';
+
+        registerMessage.textContent = '✅ ' + data.message;
         registerMessage.className = 'message success';
         regLoginInput.value = '';
         regPasswordInput.value = '';
         regPasswordConfirmInput.value = '';
+
         setTimeout(() => {
             tabBtns.forEach(b => b.classList.remove('active'));
             document.querySelector('[data-tab="loginTab"]').classList.add('active');
@@ -153,8 +131,68 @@ async function registerUser(login, password, confirm) {
         return true;
     } catch (error) {
         console.error('Ошибка регистрации:', error);
-        registerMessage.textContent = '⚠️ Ошибка при хешировании пароля. Убедитесь, что сайт открыт через HTTPS или localhost.';
+        registerMessage.textContent = '⚠️ Сервер недоступен. Проверьте, запущен ли backend.';
         registerMessage.className = 'message error';
+        return false;
+    }
+}
+
+// ----- Вход (через сервер) с таймером блокировки -----
+let loginCooldownTimer = null;
+
+function startLoginCooldown(seconds) {
+    let remaining = seconds;
+    loginBtn.disabled = true;
+
+    if (loginCooldownTimer) clearInterval(loginCooldownTimer);
+
+    loginCooldownTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+            clearInterval(loginCooldownTimer);
+            loginCooldownTimer = null;
+            loginBtn.disabled = false;
+            loginMessage.textContent = 'Можно попробовать снова';
+            loginMessage.className = 'message';
+        } else {
+            loginMessage.textContent = `⏳ Подождите ${remaining} с...`;
+        }
+    }, 1000);
+}
+
+async function loginUser(login, password) {
+    try {
+        const response = await fetch(`${API_BASE}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login, password })
+        });
+        const data = await response.json();
+
+        // 401 (неверный пароль) или 429 (слишком много попыток) — запускаем таймер
+        if (response.status === 401 || response.status === 429) {
+            loginMessage.textContent = '❌ ' + data.error;
+            loginMessage.className = 'message error';
+            const seconds = data.lockSeconds || 5;
+            startLoginCooldown(seconds);
+            return false;
+        }
+
+        if (!response.ok) {
+            loginMessage.textContent = '❌ ' + (data.error || 'Ошибка');
+            loginMessage.className = 'message error';
+            return false;
+        }
+
+        loginMessage.textContent = '';
+        loginMessage.className = 'message';
+        sessionStorage.setItem('currentUser', login);
+        showCatalog(login);
+        return true;
+    } catch (error) {
+        console.error('Ошибка входа:', error);
+        loginMessage.textContent = '⚠️ Сервер недоступен. Проверьте, запущен ли backend.';
+        loginMessage.className = 'message error';
         return false;
     }
 }
@@ -219,8 +257,6 @@ logoutBtn.addEventListener('click', logout);
 
 // ----- Проверка сессии при загрузке -----
 const savedUser = sessionStorage.getItem('currentUser');
-if (savedUser && findUser(savedUser)) {
+if (savedUser) {
     showCatalog(savedUser);
-} else {
-    sessionStorage.removeItem('currentUser');
 }
