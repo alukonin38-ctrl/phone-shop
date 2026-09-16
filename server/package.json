@@ -9,13 +9,13 @@
   },
   "keywords": [
     "express",
-    "bcryptjs",
+    "argon2",
     "authentication"
   ],
   "author": "Ваше Имя",
   "license": "ISC",
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "@node-rs/argon2": "^2.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2"

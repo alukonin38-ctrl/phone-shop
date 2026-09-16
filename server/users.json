@@ -2,15 +2,9 @@
   "users": [
     {
       "id": 1,
-      "login": "ygfecusg",
-      "password_hash": "$2a$10$gh1QBSVe1mit/4wTWgJVYOCsAvo28bOzcJNAs2q4p4D3zBh.4Iriq",
-      "created_at": "2026-09-15T17:15:47.152Z"
-    },
-    {
-      "id": 2,
-      "login": "tygh87vb",
-      "password_hash": "$2a$10$pWQ4IxkH/6f46yxJaCg15ezTbgO6djf52E5JxXKbb8VuLl8625uGu",
-      "created_at": "2026-09-15T17:16:24.956Z"
+      "login": "derf",
+      "password_hash": "$2a$10$IVf4Wpjgi7VXK8zo8ulpOutPaYkO4cR1pRSd5tJgLW03.AnsSL3QK",
+      "created_at": "2026-09-16T20:06:48.540Z"
     }
   ],
   "login_attempts": []

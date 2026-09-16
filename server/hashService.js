@@ -1,28 +1,35 @@
-// hashService.js — двухслойное хеширование пароля
-const bcrypt = require('bcryptjs');
-const { sha256 } = require('./sha256');
+// hashService.js — хеширование паролей через Argon2id
+const argon2 = require('@node-rs/argon2');
 
 /**
- * Создаёт хеш пароля:
- *  1) SHA-256 от (password + pepper)
- *  2) bcrypt от результата
- *
- * Pepper — секретная строка из .env, добавляется перед SHA-256.
+ * Создаёт Argon2id-хеш пароля.
+ * Параметры соответствуют рекомендациям OWASP:
+ *   memoryCost = 64 МБ, timeCost = 3, parallelism = 4
+ * @param {string} password
+ * @returns {Promise<string>} строка вида $argon2id$v=19$m=65536,t=3,p=4$...
  */
 async function hashPassword(password) {
-  const pepper = process.env.PEPPER || 'default-pepper-change-me';
-  const preHash = sha256(password + pepper);       // 64 hex-символа
-  const bcryptHash = await bcrypt.hash(preHash, 10);
-  return bcryptHash;
+  return await argon2.hash(password, {
+    memoryCost: 65536,   // 64 МБ памяти на каждый хеш
+    timeCost: 3,         // 3 итерации
+    parallelism: 4,      // 4 потока
+    algorithm: argon2.Algorithm.Argon2id,
+  });
 }
 
 /**
- * Проверяет пароль против сохранённого bcrypt-хеша.
+ * Проверяет пароль против сохранённого хеша.
+ * @param {string} password
+ * @param {string} storedHash
+ * @returns {Promise<boolean>}
  */
 async function verifyPassword(password, storedHash) {
-  const pepper = process.env.PEPPER || 'default-pepper-change-me';
-  const preHash = sha256(password + pepper);
-  return bcrypt.compare(preHash, storedHash);
+  try {
+    return await argon2.verify(storedHash, password);
+  } catch (err) {
+    console.error('Ошибка проверки Argon2:', err);
+    return false;
+  }
 }
 
 module.exports = { hashPassword, verifyPassword };

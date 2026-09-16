@@ -1,3 +1,32 @@
+const fs = require('fs');
+const path = require('path');
+
+// ---------- ЗАГРУЗКА СПИСКА ЧАСТЫХ ПАРОЛЕЙ ----------
+let COMMON_PASSWORDS = new Set();
+
+function loadCommonPasswords() {
+  const filePath = path.join(__dirname, '100k-most-used-passwords-NCSC.txt');
+  try {
+    const data = fs.readFileSync(filePath, 'utf8');
+    // Разбиваем по строкам, убираем пустые, приводим к нижнему регистру
+    const lines = data.split(/\r?\n/).map(line => line.trim().toLowerCase()).filter(Boolean);
+    COMMON_PASSWORDS = new Set(lines);
+    console.log(`Загружено ${COMMON_PASSWORDS.size} частых паролей.`);
+  } catch (err) {
+    console.error('Не удалось загрузить файл с частыми паролями:', err.message);
+    // Если файла нет — используем минимальный набор (на случай, если забыли положить файл)
+    COMMON_PASSWORDS = new Set([
+      'password', '123456', '12345678', 'qwerty', 'abc123', 'monkey', '1234567',
+      'letmein', 'trustno1', 'dragon', 'baseball', '111111', 'iloveyou', 'master',
+      'sunshine', 'ashley', 'bailey', 'passw0rd', 'shadow', '123123', '654321',
+      'superman', 'qazwsx', 'michael', 'football'
+    ]);
+  }
+}
+
+// Загружаем список один раз при старте сервера
+loadCommonPasswords();
+
 // ---------- ВАЛИДАЦИЯ ЛОГИНА ----------
 function validateLogin(login) {
   if (!login || typeof login !== 'string') {
@@ -10,7 +39,6 @@ function validateLogin(login) {
   if (trimmed.length > 20) {
     return { ok: false, error: 'Логин должен быть не длиннее 20 символов' };
   }
-  // Только латиница, цифры, _, -
   if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
     return { ok: false, error: 'Логин может содержать только латиницу, цифры, "_" и "-"' };
   }
@@ -26,7 +54,6 @@ function validatePassword(password) {
     return { ok: false, error: 'Пароль должен содержать минимум 8 символов' };
   }
   if (password.length > 72) {
-    // Ограничение bcrypt
     return { ok: false, error: 'Пароль не должен превышать 72 символа' };
   }
   if (!/[a-z]/.test(password)) {
@@ -41,41 +68,29 @@ function validatePassword(password) {
   return { ok: true };
 }
 
-// ---------- СЛОВАРЬ ЧАСТЫХ ПАРОЛЕЙ ----------
-// Короткий, но показательный список. В реальном проекте
-// используйте файл на десятки тысяч слов (например, rockyou.txt).
-const COMMON_PASSWORDS = new Set([
-  'password', 'password1', 'password123', 'qwerty', 'qwerty123',
-  '12345678', '123456789', '1234567890', '11111111', '00000000',
-  'iloveyou', 'admin', 'admin123', 'root', 'letmein', 'welcome',
-  'monkey', 'dragon', 'sunshine', 'princess', 'football',
-  'baseball', 'abc12345', 'abcdefgh', 'qazwsx', '1q2w3e4r',
-  'qwertyuiop', 'asdfghjkl', 'zxcvbnm', 'qwe123', 'qweasd',
-  'password!', 'p@ssw0rd', 'passw0rd', 'master', 'hello',
-  'freedom', 'whatever', 'trustno1', 'starwars', 'superman',
-  'batman', 'login', 'user', 'guest', 'test', 'test123',
-  'minecraft', 'pokemon', 'samsung', 'iphone', 'google',
-  'moscow', 'russia', 'london', 'paris', 'berlin'
-]);
-
+// ---------- ПРОВЕРКА НА ЧАСТЫЙ ПАРОЛЬ ----------
 function isCommonPassword(password) {
   const lower = password.toLowerCase();
+  // 1. Точное совпадение со списком
   if (COMMON_PASSWORDS.has(lower)) return true;
-  // Проверяем "password" + цифры
+  // 2. Проверяем "password" + цифры (на случай, если в списке нет всех вариантов)
   if (/^password\d*$/.test(lower)) return true;
-  // Проверяем "qwerty" + цифры
+  // 3. Проверяем "qwerty" + цифры
   if (/^qwerty\d*$/.test(lower)) return true;
-  // Только цифры (от 6 до 12)
+  // 4. Только цифры (от 6 до 12) — тоже часто
   if (/^\d{6,12}$/.test(lower)) return true;
+  // 5. Можно добавить проверку на вхождение в список после удаления цифр в конце
+  //    Например, "password123" -> "password"
+  const withoutTrailingDigits = lower.replace(/\d+$/, '');
+  if (withoutTrailingDigits.length >= 4 && COMMON_PASSWORDS.has(withoutTrailingDigits)) {
+    return true;
+  }
   return false;
 }
 
 // ---------- ДЕТЕКТОР «КЛАВИАТУРНОГО МУСОРА» ----------
-// Ловит последовательности: qwerty, asdf, zxcv, 1234, abcd и т.п.
 function isKeyboardMash(password) {
   const lower = password.toLowerCase();
-
-  // 1. Проверка на последовательности клавиш (qwerty, asdf, zxcv)
   const rows = [
     'qwertyuiop',
     'asdfghjkl',
@@ -93,13 +108,8 @@ function isKeyboardMash(password) {
       }
     }
   }
-
-  // 2. Проверка на повторяющиеся символы: aaaa, 1111, !!!!
-  if (/(.)\1{3,}/.test(lower)) return true;
-
-  // 3. Проверка на чередование: ababab, 121212
-  if (/(..)\1{2,}/.test(lower)) return true;
-
+  if (/(.)\1{3,}/.test(lower)) return true; // aaaa, 1111
+  if (/(..)\1{2,}/.test(lower)) return true; // ababab, 121212
   return false;
 }
 
