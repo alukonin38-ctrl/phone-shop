@@ -5,7 +5,19 @@
       "login": "derf",
       "password_hash": "$2a$10$IVf4Wpjgi7VXK8zo8ulpOutPaYkO4cR1pRSd5tJgLW03.AnsSL3QK",
       "created_at": "2026-09-16T20:06:48.540Z"
+    },
+    {
+      "id": 2,
+      "login": "111222333",
+      "password_hash": "$argon2id$v=19$m=65536,t=3,p=4$vWXcI5G0JMdg2qJw1RbD4Q$Uqk89Pfcu3gIFFYHB8k1OlBLg1U+OKJYqJQ+j2XQp6o",
+      "created_at": "2026-09-17T13:06:24.382Z"
     }
   ],
-  "login_attempts": []
+  "login_attempts": [
+    {
+      "login": "derf",
+      "failed_count": 2,
+      "locked_until": 1789650337964
+    }
+  ]
 }
