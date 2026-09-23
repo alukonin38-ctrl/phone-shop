@@ -111,6 +111,12 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Phone Shop API работает' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Инициализация БД перед запуском сервера
+db.init().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  console.error('Ошибка инициализации БД:', err);
+  process.exit(1);
 });

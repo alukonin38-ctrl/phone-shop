@@ -1,92 +1,97 @@
-// db.js — простое JSON-хранилище вместо SQLite
-// Данные хранятся в файле users.json рядом с этим файлом
-
+// db.js — настоящая SQLite через sql.js (WebAssembly, без компиляции)
+const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.resolve(__dirname, 'users.json');
+const DB_PATH = path.resolve(__dirname, 'users.db');
+let db = null;
 
-// Начальная структура БД
-const DEFAULT_DB = {
-  users: [],           // [{ id, login, password_hash, created_at }]
-  login_attempts: []   // [{ login, failed_count, locked_until }]
-};
+async function init() {
+  const SQL = await initSqlJs();
 
-// Загрузка БД из файла
-function loadDb() {
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify(DEFAULT_DB, null, 2), 'utf8');
-    return JSON.parse(JSON.stringify(DEFAULT_DB));
+  if (fs.existsSync(DB_PATH)) {
+    const fileBuffer = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(fileBuffer);
+  } else {
+    db = new SQL.Database();
   }
-  try {
-    const raw = fs.readFileSync(DB_PATH, 'utf8');
-    const data = JSON.parse(raw);
-    // На случай, если структура неполная
-    data.users = data.users || [];
-    data.login_attempts = data.login_attempts || [];
-    return data;
-  } catch (e) {
-    console.error('Ошибка чтения users.json, создаём новый:', e.message);
-    fs.writeFileSync(DB_PATH, JSON.stringify(DEFAULT_DB, null, 2), 'utf8');
-    return JSON.parse(JSON.stringify(DEFAULT_DB));
-  }
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      login TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      login TEXT PRIMARY KEY,
+      failed_count INTEGER DEFAULT 0,
+      locked_until INTEGER DEFAULT 0
+    );
+  `);
+
+  save();
+  console.log('SQLite база данных готова');
 }
 
-// Сохранение БД в файл
-function saveDb(data) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
+function save() {
+  if (!db) return;
+  const data = db.export();
+  fs.writeFileSync(DB_PATH, Buffer.from(data));
 }
-
-// ============ USERS ============
 
 function findUserByLogin(login) {
-  const db = loadDb();
-  return db.users.find(u => u.login === login) || null;
+  const stmt = db.prepare('SELECT * FROM users WHERE login = ?');
+  stmt.bind([login]);
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return row;
+  }
+  stmt.free();
+  return null;
 }
 
 function createUser(login, passwordHash) {
-  const db = loadDb();
-  const id = db.users.length > 0 ? Math.max(...db.users.map(u => u.id)) + 1 : 1;
-  const user = {
-    id,
-    login,
-    password_hash: passwordHash,
-    created_at: new Date().toISOString()
-  };
-  db.users.push(user);
-  saveDb(db);
-  return user;
+  db.run('INSERT INTO users (login, password_hash) VALUES (?, ?)', [login, passwordHash]);
+  save();
+  return findUserByLogin(login);
 }
 
-// ============ LOGIN ATTEMPTS ============
-
 function getAttempt(login) {
-  const db = loadDb();
-  return db.login_attempts.find(a => a.login === login) || null;
+  const stmt = db.prepare('SELECT * FROM login_attempts WHERE login = ?');
+  stmt.bind([login]);
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return row;
+  }
+  stmt.free();
+  return null;
 }
 
 function setAttempt(login, failedCount, lockedUntil) {
-  const db = loadDb();
-  const existing = db.login_attempts.find(a => a.login === login);
+  const existing = getAttempt(login);
   if (existing) {
-    existing.failed_count = failedCount;
-    existing.locked_until = lockedUntil;
+    db.run('UPDATE login_attempts SET failed_count = ?, locked_until = ? WHERE login = ?',
+           [failedCount, lockedUntil, login]);
   } else {
-    db.login_attempts.push({ login, failed_count: failedCount, locked_until: lockedUntil });
+    db.run('INSERT INTO login_attempts (login, failed_count, locked_until) VALUES (?, ?, ?)',
+           [login, failedCount, lockedUntil]);
   }
-  saveDb(db);
+  save();
 }
 
 function clearAttempt(login) {
-  const db = loadDb();
-  const index = db.login_attempts.findIndex(a => a.login === login);
-  if (index !== -1) {
-    db.login_attempts.splice(index, 1);
-    saveDb(db);
-  }
+  db.run('DELETE FROM login_attempts WHERE login = ?', [login]);
+  save();
 }
 
 module.exports = {
+  init,
   findUserByLogin,
   createUser,
   getAttempt,
