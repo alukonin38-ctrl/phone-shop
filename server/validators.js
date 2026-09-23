@@ -71,23 +71,27 @@ function validatePassword(password) {
 // ---------- ПРОВЕРКА НА ЧАСТЫЙ ПАРОЛЬ ----------
 function isCommonPassword(password) {
   const lower = password.toLowerCase();
+
   // 1. Точное совпадение со списком
   if (COMMON_PASSWORDS.has(lower)) return true;
-  // 2. Проверяем "password" + цифры (на случай, если в списке нет всех вариантов)
-  if (/^password\d*$/.test(lower)) return true;
-  // 3. Проверяем "qwerty" + цифры
-  if (/^qwerty\d*$/.test(lower)) return true;
-  // 4. Только цифры (от 6 до 12) — тоже часто
+
+  // 2. "password" + любые символы
+  if (/^password/.test(lower)) return true;
+
+  // 3. "qwerty" + любые символы
+  if (/^qwerty/.test(lower)) return true;
+
+  // 4. Только цифры (6-12)
   if (/^\d{6,12}$/.test(lower)) return true;
-  // 5. Можно добавить проверку на вхождение в список после удаления цифр в конце
-  //    Например, "password123" -> "password"
+
+  // 5. Убрать цифры в конце и проверить в списке
   const withoutTrailingDigits = lower.replace(/\d+$/, '');
   if (withoutTrailingDigits.length >= 4 && COMMON_PASSWORDS.has(withoutTrailingDigits)) {
     return true;
   }
+
   return false;
 }
-
 // ---------- ДЕТЕКТОР «КЛАВИАТУРНОГО МУСОРА» ----------
 function isKeyboardMash(password) {
   const lower = password.toLowerCase();
