@@ -143,9 +143,15 @@ describe('isCommonPassword', () => {
     expect(isCommonPassword('MyUniqueP@ss42')).toBe(false);
   });
 
-  test('не считает частым пароль из 5 цифр (короче порога)', () => {
-    expect(isCommonPassword('12345')).toBe(false);
-  });
+  test('ловит пароль из 5 цифр, если он есть в списке', () => {
+  // '12345' есть в 100k списке — код правильно его отклонит
+  expect(isCommonPassword('12345')).toBe(true);
+});
+
+test('не считает частым уникальный набор цифр', () => {
+  // Это число вряд ли есть в списке
+  expect(isCommonPassword('73912')).toBe(false);
+});
 });
 
 // ============================================================
