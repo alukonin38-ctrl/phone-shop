@@ -113,8 +113,10 @@ app.get('/', (req, res) => {
 
 // Инициализация БД перед запуском сервера
 db.init().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  const server = app.listen(PORT, () => {
+    // Печатаем реальный порт (важно при PORT=0 — тогда ОС выдаёт свободный порт).
+    const actualPort = server.address().port;
+    console.log(`Server running on http://localhost:${actualPort}`);
   });
 }).catch(err => {
   console.error('Ошибка инициализации БД:', err);

@@ -3,7 +3,11 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.resolve(__dirname, 'users.db');
+// Путь к файлу БД. Можно переопределить через переменную окружения DB_PATH —
+// это нужно тестам и сценарию пользователя, чтобы не трогать боевую users.db.
+const DB_PATH = process.env.DB_PATH
+  ? path.resolve(process.env.DB_PATH)
+  : path.resolve(__dirname, 'users.db');
 let db = null;
 
 async function init() {
