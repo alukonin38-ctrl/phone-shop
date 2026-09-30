@@ -1,0 +1,88 @@
+# Бенчмарк Argon2id (в том числе 20 МБ памяти и parallelism = 1)
+#
+# Запускается:
+#   • вручную (Actions → «Бенчмарк Argon2» → Run workflow) с параметрами
+#   • по расписанию (каждый понедельник в 03:00 UTC)
+#   • при изменении кода хеширования или самого бенчмарка
+#
+# Результаты (JSON + Markdown) сохраняются как артефакт и попадают в сводку запуска.
+
+name: Бенчмарк Argon2
+
+on:
+  workflow_dispatch:
+    inputs:
+      memory:
+        description: 'Память (memoryCost в КиБ; 20480 = 20 МБ)'
+        required: false
+        default: '20480'
+      parallelism:
+        description: 'Параллелизм (1 = один поток)'
+        required: false
+        default: '1'
+      time:
+        description: 'Число итераций Argon2 (timeCost)'
+        required: false
+        default: '3'
+      iterations:
+        description: 'Сколько раз измерять каждый набор'
+        required: false
+        default: '15'
+  schedule:
+    - cron: '0 3 * * 1'
+  push:
+    paths:
+      - 'server/benchmarks/**'
+      - 'server/hashService.js'
+      - '.github/workflows/argon2-benchmark.yml'
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  benchmark:
+    name: Argon2id benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить код
+        uses: actions/checkout@v4
+
+      - name: Установить Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Установить зависимости
+        run: npm ci
+
+      - name: Информация о стенде
+        run: |
+          node -v
+          node -e "console.log('CPU:', require('os').cpus().length, 'ядер,', require('os').cpus()[0].model)"
+
+      - name: Заданный набор (по умолчанию 20 МБ + p=1)
+        run: |
+          node benchmarks/argon2.bench.js \
+            --memory=${{ inputs.memory || '20480' }} \
+            --parallelism=${{ inputs.parallelism || '1' }} \
+            --time=${{ inputs.time || '3' }} \
+            --iterations=${{ inputs.iterations || '15' }}
+
+      - name: Полный набор пресетов (сравнение с OWASP 64 МБ / t=3 / p=4)
+        run: npm run bench -- --iterations=10
+
+      - name: Сохранить артефакты бенчмарка
+        uses: actions/upload-artifact@v4
+        with:
+          name: argon2-benchmark-results
+          path: server/benchmarks/results
+          if-no-files-found: error
+
+      - name: Добавить отчёт в сводку запуска
+        run: |
+          latest=$(ls -t benchmarks/results/*.md | head -n 1)
+          echo "## Отчёт: $(basename "$latest")" >> "$GITHUB_STEP_SUMMARY"
+          cat "$latest" >> "$GITHUB_STEP_SUMMARY"
