@@ -1,5 +1,6 @@
 // server/__tests__/validators.test.js
-// Юнит-тесты для модуля validators.js
+// Юнит-тесты для модуля validators.js.
+// Структура: Happy path (корректные данные) и Negative path (ошибочные данные).
 
 const {
   validateLogin,
@@ -10,9 +11,9 @@ const {
 } = require('../validators');
 
 // ============================================================
-// ТЕСТЫ ДЛЯ validateLogin
+// validateLogin — Happy path
 // ============================================================
-describe('validateLogin', () => {
+describe('validateLogin — Happy path', () => {
   test('принимает корректный логин', () => {
     expect(validateLogin('validUser123')).toEqual({ ok: true, value: 'validUser123' });
   });
@@ -25,6 +26,20 @@ describe('validateLogin', () => {
     expect(validateLogin('  user123  ')).toEqual({ ok: true, value: 'user123' });
   });
 
+  test('принимает логин ровно из 3 символов (нижняя граница)', () => {
+    expect(validateLogin('abc')).toEqual({ ok: true, value: 'abc' });
+  });
+
+  test('принимает логин ровно из 20 символов (верхняя граница)', () => {
+    const login = 'a'.repeat(20);
+    expect(validateLogin(login)).toEqual({ ok: true, value: login });
+  });
+});
+
+// ============================================================
+// validateLogin — Negative path
+// ============================================================
+describe('validateLogin — Negative path', () => {
   test('отклоняет пустой логин', () => {
     const result = validateLogin('');
     expect(result.ok).toBe(false);
@@ -34,6 +49,18 @@ describe('validateLogin', () => {
   test('отклоняет undefined', () => {
     const result = validateLogin(undefined);
     expect(result.ok).toBe(false);
+  });
+
+  test('отклоняет null', () => {
+    expect(validateLogin(null).ok).toBe(false);
+  });
+
+  test('отклоняет число вместо строки', () => {
+    expect(validateLogin(12345).ok).toBe(false);
+  });
+
+  test('отклоняет логин из одних пробелов', () => {
+    expect(validateLogin('     ').ok).toBe(false);
   });
 
   test('отклоняет логин короче 3 символов', () => {
@@ -67,17 +94,39 @@ describe('validateLogin', () => {
 });
 
 // ============================================================
-// ТЕСТЫ ДЛЯ validatePassword
+// validatePassword — Happy path
 // ============================================================
-describe('validatePassword', () => {
+describe('validatePassword — Happy path', () => {
   test('принимает корректный пароль', () => {
     expect(validatePassword('MyPass123')).toEqual({ ok: true });
   });
 
+  test('принимает пароль ровно из 8 символов (нижняя граница)', () => {
+    expect(validatePassword('MyPass12')).toEqual({ ok: true });
+  });
+
+  test('принимает длинный пароль со спецсимволами', () => {
+    expect(validatePassword('My-Unique_P@ss42!')).toEqual({ ok: true });
+  });
+});
+
+// ============================================================
+// validatePassword — Negative path
+// ============================================================
+describe('validatePassword — Negative path', () => {
   test('отклоняет пустой пароль', () => {
     const result = validatePassword('');
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/обязателен/i);
+  });
+
+  test('отклоняет undefined и null', () => {
+    expect(validatePassword(undefined).ok).toBe(false);
+    expect(validatePassword(null).ok).toBe(false);
+  });
+
+  test('отклоняет число вместо строки', () => {
+    expect(validatePassword(12345678).ok).toBe(false);
   });
 
   test('отклоняет пароль короче 8 символов', () => {
@@ -112,9 +161,9 @@ describe('validatePassword', () => {
 });
 
 // ============================================================
-// ТЕСТЫ ДЛЯ isCommonPassword
+// isCommonPassword — Happy path (частые пароли находятся)
 // ============================================================
-describe('isCommonPassword', () => {
+describe('isCommonPassword — Happy path', () => {
   test('находит точное совпадение из списка (password)', () => {
     expect(isCommonPassword('password')).toBe(true);
   });
@@ -139,25 +188,34 @@ describe('isCommonPassword', () => {
     expect(isCommonPassword('1234567890')).toBe(true);
   });
 
+  test('ловит пароль из 5 цифр, если он есть в списке', () => {
+    // '12345' есть в 100k списке — код правильно его отклонит
+    expect(isCommonPassword('12345')).toBe(true);
+  });
+});
+
+// ============================================================
+// isCommonPassword — Negative path (уникальные пароли пропускаются)
+// ============================================================
+describe('isCommonPassword — Negative path', () => {
   test('не считает частым уникальный пароль', () => {
     expect(isCommonPassword('MyUniqueP@ss42')).toBe(false);
   });
 
-  test('ловит пароль из 5 цифр, если он есть в списке', () => {
-  // '12345' есть в 100k списке — код правильно его отклонит
-  expect(isCommonPassword('12345')).toBe(true);
-});
+  test('не считает частым уникальный набор цифр', () => {
+    // Это число вряд ли есть в списке
+    expect(isCommonPassword('73912')).toBe(false);
+  });
 
-test('не считает частым уникальный набор цифр', () => {
-  // Это число вряд ли есть в списке
-  expect(isCommonPassword('73912')).toBe(false);
-});
+  test('не падает на пустой строке', () => {
+    expect(typeof isCommonPassword('')).toBe('boolean');
+  });
 });
 
 // ============================================================
-// ТЕСТЫ ДЛЯ isKeyboardMash
+// isKeyboardMash — Happy path (мусор находится)
 // ============================================================
-describe('isKeyboardMash', () => {
+describe('isKeyboardMash — Happy path', () => {
   test('ловит последовательность qwerty', () => {
     expect(isKeyboardMash('qwerty123')).toBe(true);
   });
@@ -181,20 +239,43 @@ describe('isKeyboardMash', () => {
   test('ловит чередование ababab', () => {
     expect(isKeyboardMash('abababab')).toBe(true);
   });
+});
 
+// ============================================================
+// isKeyboardMash — Negative path (нормальные пароли пропускаются)
+// ============================================================
+describe('isKeyboardMash — Negative path', () => {
   test('не ловит нормальный пароль', () => {
     expect(isKeyboardMash('MyUnique42!')).toBe(false);
+  });
+
+  test('не ловит пароль с разбросанными символами', () => {
+    expect(isKeyboardMash('Xk9#mQ2!')).toBe(false);
+  });
+
+  test('не считает мусором короткое повторение (3 символа)', () => {
+    // (.)\1{3,} требует 4 и более одинаковых символов подряд
+    expect(isKeyboardMash('Xz9qqq#7')).toBe(false);
   });
 });
 
 // ============================================================
-// ТЕСТЫ ДЛЯ checkPasswordSafety (комплексная проверка)
+// checkPasswordSafety — Happy path
 // ============================================================
-describe('checkPasswordSafety', () => {
+describe('checkPasswordSafety — Happy path', () => {
   test('принимает надёжный пароль', () => {
     expect(checkPasswordSafety('MyUniqueP@ss42')).toEqual({ ok: true });
   });
 
+  test('принимает надёжный пароль со спецсимволами и цифрами', () => {
+    expect(checkPasswordSafety('VerY-lOnG_p4ssw0rd!')).toEqual({ ok: true });
+  });
+});
+
+// ============================================================
+// checkPasswordSafety — Negative path
+// ============================================================
+describe('checkPasswordSafety — Negative path', () => {
   test('отклоняет слишком короткий пароль', () => {
     const result = checkPasswordSafety('Ab1');
     expect(result.ok).toBe(false);
@@ -228,5 +309,10 @@ describe('checkPasswordSafety', () => {
   test('пароль из одних цифр не проходит', () => {
     const result = checkPasswordSafety('12345678');
     expect(result.ok).toBe(false);
+  });
+
+  test('отклоняет пустой пароль и undefined', () => {
+    expect(checkPasswordSafety('').ok).toBe(false);
+    expect(checkPasswordSafety(undefined).ok).toBe(false);
   });
 });
