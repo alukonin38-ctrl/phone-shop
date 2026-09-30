@@ -14,8 +14,12 @@ on:
     branches:
       - main
       - 'feature/**'
+      - 'feat/**'
       - 'fix/**'
       - 'tests/**'
+      - 'chore/**'
+      - 'docs/**'
+      - 'ci/**'
   pull_request:
     branches:
       - main
